@@ -34,6 +34,11 @@ Thumbs.db
 *.swp
 *.swo
 
+# Generated images (Unsplash / Gemini outputs + sidecars). Keep the dir
+# tracked via .gitkeep so Next.js can still serve /images/* in fresh clones.
+template/public/images/*
+!template/public/images/.gitkeep
+
 # Generated carousels / exports
 exports/
 *.carousel.png

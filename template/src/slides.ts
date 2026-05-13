@@ -2,73 +2,64 @@ import type { SlideData, BgType, FormatId, FontId, SurfaceId, AccentId, PurposeI
 
 export const SLIDES: SlideData[] = [
   {
-    "type": "hook",
-    "text": "Ушёл с 250К\nна свой проект",
-    "highlight": "250К",
-    "highlightStyle": "italic-box"
+    type: "hook",
+    text: "Утро\nбез возни",
+    highlight: "без возни",
+    highlightStyle: "italic-box"
   },
   {
-    "type": "body",
-    "badge": "01",
-    "title": "Точка старта",
-    "text": "Год назад была стабильная зарплата. Сегодня — продукт, клиенты и свой MRR.",
-    "highlight": "Год назад"
-  },
-  {
-    "type": "stats",
-    "badge": "02",
-    "title": "Цифры за год",
-    "stats": [
-      { "value": "47К", "label": "Средний чек" },
-      { "value": "3.2%", "label": "Конверсия" },
-      { "value": "480К", "label": "MRR" }
+    type: "comparison",
+    badge: "01",
+    leftLabel: "Bialetti",
+    leftItems: [
+      "15 минут возни",
+      "Кофе — окей",
+      "Плита и нервы"
     ],
-    "surface": "ember",
-    "accent": "lime",
-    "bg": "bignumber"
-  },
-  {
-    "type": "quote",
-    "text": "это первый сервис\nгде меня поняли",
-    "author": "Клиент",
-    "surface": "paper",
-    "accent": "orange",
-    "font": "editorial",
-    "bg": "paper"
-  },
-  {
-    "type": "comparison",
-    "badge": "03",
-    "leftLabel": "Зашло",
-    "leftItems": [
-      "Бесплатные консультации",
-      "Личные звонки",
-      "Кейс-стори"
-    ],
-    "rightLabel": "Мимо",
-    "rightItems": [
-      "Холодные рассылки",
-      "Скидки",
-      "Бот в Telegram"
+    rightLabel: "Sage Barista",
+    rightItems: [
+      "30 секунд",
+      "Кофе как в кафе",
+      "Одна кнопка"
     ]
   },
   {
-    "type": "body",
-    "badge": "04",
-    "title": "Главный урок",
-    "text": "Фокус на одной нише. Всё остальное — шум.",
-    "highlight": "одной нише"
+    type: "stats",
+    badge: "02",
+    title: "Цена утра",
+    stats: [
+      { value: "15 мин", label: "Старая возня" },
+      { value: "30 сек", label: "Новый ритуал" },
+      { value: "30×", label: "Быстрее" }
+    ],
+    surface: "ember",
+    accent: "lime",
+    bg: "bignumber"
   },
   {
-    "type": "cta",
-    "text": "Подписывайся",
-    "handle": "@painsearchdev"
+    type: "image",
+    imageSrc: "/images/20260513T082256Z-unsplash-9e9394.jpg",
+    title: "Новая станция",
+    imageCaption: "Sage Barista Express — кухня, май 2026"
+  },
+  {
+    type: "quote",
+    text: "Время важнее денег.\nОсобенно утром.",
+    author: "Урок с кухни",
+    role: "Май 2026"
+  },
+  {
+    type: "cta",
+    text: "Честные апдейты\nо жизни и тех.",
+    handle: "@painsearchdev",
+    highlight: "Честные",
+    highlightStyle: "italic-box"
   }
 ];
 
-export const DEFAULT_FONT: FontId = "minimal";
-export const DEFAULT_SURFACE: SurfaceId = "dark";
-export const DEFAULT_ACCENT: AccentId = "yellow";
+export const DEFAULT_FONT: FontId = "editorial";
+export const DEFAULT_SURFACE: SurfaceId = "paper";
+export const DEFAULT_ACCENT: AccentId = "orange";
 export const DEFAULT_PURPOSE: PurposeId = "carousel";
-export const DEFAULT_BG: BgType = "glow";
+export const DEFAULT_BG: BgType = "paper";
 export const DEFAULT_FORMAT: FormatId = "threads-4x5";
