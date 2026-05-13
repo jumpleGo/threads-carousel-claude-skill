@@ -57,13 +57,55 @@ All types also support optional:
 
 ### Images in slides
 
-`image` slides expect `imageSrc` as a path served by Next.js under `/public/`. Workflow when a user gives you a local file:
+`image` slides expect `imageSrc` as a path served by Next.js under `/public/`. External URLs are forbidden — `html-to-image` blanks them on capture. Everything must end up in `template/public/images/` and be referenced as `/images/<file>`.
 
-1. User drops a file path like `/Users/me/Desktop/screenshot.png` (or passes a file via the chat).
-2. Copy it into `template/public/images/` with a safe, lowercase filename — e.g. `cp "$USER_PATH" template/public/images/screenshot.png`.
-3. In `slides.ts` reference it as `imageSrc: "/images/screenshot.png"` (absolute from `/public/`).
+#### Autonomous image pipeline (recommended)
 
-Same-origin serving avoids CORS errors in the PNG export pipeline. Do not use external URLs — `html-to-image` will often blank them out.
+The skill ships with three CLI tools under `tools/` so Claude can source images itself, no manual file uploads required:
+
+| Tool | Purpose | Env needed |
+|---|---|---|
+| `tools/fetch_unsplash.py "query"` | Pick top Unsplash photo, download | `UNSPLASH_ACCESS_KEY` |
+| `tools/gen_nano_banana.py "subject"` | Generate via Gemini `gemini-2.5-flash-image` ("nano-banana"), forcing pure green (#00FF00) chroma background | `GEMINI_API_KEY` |
+| `tools/chroma_remove.py in out` | Cut green background → transparent PNG (pure Pillow) | none |
+
+Each tool prints the resulting `/images/<file>` path on stdout (or writes to a given `out_path` for chroma). All three live in `~/.claude/skills/threads-carousel/tools/`.
+
+**Pick the right source by content:**
+
+- **Real-world photo** (laptop, office, hands, coffee, sunset, person…) → `fetch_unsplash.py "query"`. Single network call, returns a 1080-wide JPEG.
+- **Concept / illustration / isolated object** (rocket, chart, icon, character) → `gen_nano_banana.py "subject"`, then `chroma_remove.py raw cut`. The Gemini wrapper hard-codes the prompt to use a flat #00FF00 background that the chroma tool peels away.
+
+**Pipeline for illustration:**
+
+```bash
+RAW=$(tools/gen_nano_banana.py "isolated rocket launching upward" \
+        --style "minimal flat illustration, bold lines" \
+        --mood "clean tech, confident")
+RAW_ABS=template/public/images/$(basename "$RAW")
+CUT_ABS=${RAW_ABS%.png}-cut.png
+tools/chroma_remove.py "$RAW_ABS" "$CUT_ABS" --feather 1.5 --despill
+# imageSrc value: /images/$(basename "$CUT_ABS")
+```
+
+`--feather 1.5 --despill` is the recommended default — it softens edges and kills the green halo around the subject.
+
+**Prompt-writing for Gemini:** keep `subject` to one noun phrase. Use `--style` and `--mood` to express the carousel's visual identity:
+
+| Carousel preset | `--style` | `--mood` |
+|---|---|---|
+| dark + yellow (tech) | `minimal flat illustration, bold lines` | `clean tech, confident` |
+| paper + orange (literary) | `hand-drawn ink illustration, warm tones` | `thoughtful, intimate` |
+| ember + lime (dramatic) | `neon outlines on dark, bold` | `urgent, high-contrast` |
+| white + coral (editorial) | `clean vector, soft pastels` | `editorial, modern` |
+
+#### Manual override
+
+If the user drops a local file path like `/Users/me/Desktop/screenshot.png`, copy it into `template/public/images/` under a safe lowercase name and reference as `/images/<file>` — same end-state, no tools needed.
+
+#### Failure handling
+
+If both image tools error out (missing keys, API quota, network) and you still want an `image` slide, **drop the slide and pick a different type** (`stats`, `quote`, `comparison`, `body+points`). Never ship `imageSrc` pointing to a nonexistent file.
 
 ## Background decorations (8 types)
 
