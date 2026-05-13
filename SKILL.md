@@ -141,6 +141,22 @@ Total combinations: 8 surfaces × 8 accents × 5 fonts × 2 purposes = **640 val
 
 Pick `purpose: "presentation"` + `format: "wide-16x9"` for a desktop / YouTube presentation deck. Any 3 × 8 × 2 = 48 combinations are valid.
 
+### Per-slide style overrides
+
+Any slide can override the global `font` / `surface` / `accent` / `bg` axes individually:
+
+```ts
+{ type: "body", title: "Hero", text: "Этот слайд кричит",
+  surface: "neon", accent: "fuchsia", bg: "blobs" }   // overrides only on this slide
+```
+
+Use this to:
+- **выделить главный слайд** карусели (например, surface=`neon` / accent=`fuchsia` / bg=`blobs` среди `dark`+`yellow`+`glow`)
+- задать литературному квоту бумажную подложку (`surface: "paper"`, `font: "editorial"`, `bg: "paper"`)
+- сделать stats-слайд драматичным (`surface: "ember"`, `accent: "lime"`, `bg: "bignumber"`)
+
+Не злоупотреблять — 1-2 override-слайда на 6-8 общих, иначе теряется ритм.
+
 ---
 
 ## Workflow
@@ -301,6 +317,5 @@ The `presentation` purpose overrides titles to 72px / 700 / sentence case and bo
 ## Future work / TODOs
 
 - **Satori server-side export** — replace browser-based `html-to-image` with Satori + Resvg for CLI export (`bun run export → out/*.png`). Enables headless runs. See `Slashgear/linkedin-carousel-gen` for reference.
-- **Per-slide background override** — currently `DEFAULT_BG` is global; could accept a per-slide `bg` field to mix decorations across a deck.
 - **Cyrillic-optimized adaptive sizing** — current thresholds are calibrated for Latin; Russian copy tends to be 20–30% longer at the same font size.
 - **Pencil MCP mode** — previous skill version had a manual design mode via Pencil; not currently implemented in the template.

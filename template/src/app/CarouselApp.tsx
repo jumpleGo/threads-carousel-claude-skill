@@ -4,7 +4,7 @@ import { useRef, useState, useCallback, useEffect, ReactNode, createContext, use
 import { toPng, toJpeg } from "html-to-image";
 import type { SlideData, BgType, StylePreset, FontId, SurfaceId, AccentId, PurposeId, FormatId } from "../lib/types";
 import { FONT_STYLES, SURFACES, ACCENTS, composePreset, FORMAT_PRESETS } from "../lib/presets";
-import { SLIDES, DEFAULT_FONT, DEFAULT_SURFACE, DEFAULT_ACCENT, DEFAULT_PURPOSE, DEFAULT_BG, DEFAULT_FORMAT } from "../slides";
+import { SLIDES as INITIAL_SLIDES, DEFAULT_FONT, DEFAULT_SURFACE, DEFAULT_ACCENT, DEFAULT_PURPOSE, DEFAULT_BG, DEFAULT_FORMAT } from "../slides";
 
 const CANVAS_W = FORMAT_PRESETS[DEFAULT_FORMAT].w;
 const CANVAS_H = FORMAT_PRESETS[DEFAULT_FORMAT].h;
@@ -1631,6 +1631,288 @@ const T = {
 } as const;
 
 // ============================================================
+// SLIDE EDITOR — inline text edit for a single slide
+// ============================================================
+
+const EDITOR_LABELS = {
+  ru: {
+    text: "Текст", title: "Заголовок", badge: "Бейдж", highlight: "Подсветка",
+    handle: "@handle", author: "Автор", role: "Роль",
+    leftLabel: "Левая колонка", rightLabel: "Правая колонка",
+    items: "Пункты", leftItems: "Слева", rightItems: "Справа",
+    imageCaption: "Подпись", emoji: "Эмодзи", bigNumber: "Число",
+    addItem: "+ пункт", remove: "✕",
+    note: "Структурные поля (stats / steps / points) правь через /carousel_make.",
+    styleSection: "Стиль этого слайда",
+    styleHint: "Перебивает глобальный тулбар. Жёлтая рамка — слайд с override'ом.",
+    styleClear: "Сбросить",
+    styleGlobal: "глобал",
+    styleFont: "Шрифт", styleSurface: "Фон", styleAccent: "Акцент", styleBg: "Декор",
+  },
+  en: {
+    text: "Text", title: "Title", badge: "Badge", highlight: "Highlight",
+    handle: "@handle", author: "Author", role: "Role",
+    leftLabel: "Left label", rightLabel: "Right label",
+    items: "Items", leftItems: "Left items", rightItems: "Right items",
+    imageCaption: "Caption", emoji: "Emoji", bigNumber: "Big number",
+    addItem: "+ item", remove: "✕",
+    note: "Structural fields (stats / steps / points) — edit via /carousel_make.",
+    styleSection: "Style for this slide",
+    styleHint: "Overrides the global toolbar. Amber outline = slide has overrides.",
+    styleClear: "Clear",
+    styleGlobal: "global",
+    styleFont: "Font", styleSurface: "Surface", styleAccent: "Accent", styleBg: "Bg decor",
+  },
+} as const;
+
+const STYLE_OPTIONS = {
+  font: ["minimal", "editorial", "clean", "mono", "condensed"] as const,
+  surface: ["dark", "white", "light", "paper", "gradient", "pastel", "neon", "ember"] as const,
+  accent: ["yellow", "red", "teal", "coral", "orange", "violet", "lime", "blue", "fuchsia", "pink", "amber"] as const,
+  bg: ["none", "blobs", "grid", "lines", "noise", "bignumber", "glow", "paper"] as const,
+};
+
+type EditorLang = keyof typeof EDITOR_LABELS;
+
+const INPUT_BASE: React.CSSProperties = {
+  background: "#111", color: "#eee", border: "1px solid #2a2a2a",
+  borderRadius: 6, padding: "6px 8px", fontSize: 13, fontFamily: "inherit",
+  width: "100%", boxSizing: "border-box",
+};
+
+function EditorRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label style={{ display: "block", fontSize: 10, color: "#888", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+      <span style={{ display: "block", marginBottom: 3 }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function ScalarInput({
+  value, onChange, multiline,
+}: {
+  value: string; onChange: (v: string) => void; multiline?: boolean;
+}) {
+  if (multiline) {
+    return (
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={3}
+        style={{ ...INPUT_BASE, resize: "vertical", lineHeight: 1.4 }}
+      />
+    );
+  }
+  return <input type="text" value={value} onChange={(e) => onChange(e.target.value)} style={INPUT_BASE} />;
+}
+
+function ItemsEditor({
+  values, onChange, addLabel, removeLabel,
+}: {
+  values: string[]; onChange: (next: string[]) => void;
+  addLabel: string; removeLabel: string;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {values.map((v, i) => (
+        <div key={i} style={{ display: "flex", gap: 6 }}>
+          <input
+            type="text"
+            value={v}
+            onChange={(e) => onChange(values.map((x, j) => (j === i ? e.target.value : x)))}
+            style={{ ...INPUT_BASE, flex: 1 }}
+          />
+          <button
+            type="button"
+            onClick={() => onChange(values.filter((_, j) => j !== i))}
+            style={{ background: "#2a2a2a", color: "#aaa", border: "none", borderRadius: 6, padding: "0 10px", cursor: "pointer", fontSize: 12 }}
+            title={removeLabel}
+          >
+            {removeLabel}
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...values, ""])}
+        style={{ background: "transparent", color: "#888", border: "1px dashed #333", borderRadius: 6, padding: "5px 8px", cursor: "pointer", fontSize: 11 }}
+      >
+        {addLabel}
+      </button>
+    </div>
+  );
+}
+
+function StyleSelect<T extends string>({
+  label, value, options, globalLabel, onChange,
+}: {
+  label: string; value: T | undefined; options: readonly T[];
+  globalLabel: string; onChange: (next: T | undefined) => void;
+}) {
+  return (
+    <label style={{ display: "block", fontSize: 10, color: "#888", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+      <span style={{ display: "block", marginBottom: 3 }}>{label}</span>
+      <select
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value ? (e.target.value as T) : undefined)}
+        style={{ ...INPUT_BASE, paddingRight: 28, appearance: "auto", fontWeight: value ? 700 : 400, color: value ? "#F59E0B" : "#aaa" }}
+      >
+        <option value="">— {globalLabel} —</option>
+        {options.map((o) => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function SlideEditor({
+  slide, onChange, lang,
+}: {
+  slide: SlideData; onChange: (patch: Partial<SlideData>) => void; lang: EditorLang;
+}) {
+  const L = EDITOR_LABELS[lang];
+  const hasStructured =
+    Array.isArray(slide.stats) || Array.isArray(slide.steps) || Array.isArray(slide.points);
+  const hasStyleOverride =
+    slide.font !== undefined || slide.surface !== undefined ||
+    slide.accent !== undefined || slide.bg !== undefined;
+
+  return (
+    <div
+      style={{
+        marginTop: 10, padding: 12, background: "#181818", border: "1px solid #262626",
+        borderRadius: 8, textAlign: "left",
+      }}
+    >
+      {slide.text !== undefined && (
+        <EditorRow label={L.text}>
+          <ScalarInput multiline value={slide.text} onChange={(v) => onChange({ text: v })} />
+        </EditorRow>
+      )}
+      {slide.title !== undefined && (
+        <EditorRow label={L.title}>
+          <ScalarInput value={slide.title} onChange={(v) => onChange({ title: v })} />
+        </EditorRow>
+      )}
+      {slide.badge !== undefined && (
+        <EditorRow label={L.badge}>
+          <ScalarInput value={slide.badge} onChange={(v) => onChange({ badge: v })} />
+        </EditorRow>
+      )}
+      {slide.highlight !== undefined && (
+        <EditorRow label={L.highlight}>
+          <ScalarInput value={slide.highlight} onChange={(v) => onChange({ highlight: v })} />
+        </EditorRow>
+      )}
+      {slide.handle !== undefined && (
+        <EditorRow label={L.handle}>
+          <ScalarInput value={slide.handle} onChange={(v) => onChange({ handle: v })} />
+        </EditorRow>
+      )}
+      {slide.author !== undefined && (
+        <EditorRow label={L.author}>
+          <ScalarInput value={slide.author} onChange={(v) => onChange({ author: v })} />
+        </EditorRow>
+      )}
+      {slide.role !== undefined && (
+        <EditorRow label={L.role}>
+          <ScalarInput value={slide.role} onChange={(v) => onChange({ role: v })} />
+        </EditorRow>
+      )}
+      {slide.leftLabel !== undefined && (
+        <EditorRow label={L.leftLabel}>
+          <ScalarInput value={slide.leftLabel} onChange={(v) => onChange({ leftLabel: v })} />
+        </EditorRow>
+      )}
+      {slide.rightLabel !== undefined && (
+        <EditorRow label={L.rightLabel}>
+          <ScalarInput value={slide.rightLabel} onChange={(v) => onChange({ rightLabel: v })} />
+        </EditorRow>
+      )}
+      {slide.imageCaption !== undefined && (
+        <EditorRow label={L.imageCaption}>
+          <ScalarInput value={slide.imageCaption} onChange={(v) => onChange({ imageCaption: v })} />
+        </EditorRow>
+      )}
+      {slide.emoji !== undefined && (
+        <EditorRow label={L.emoji}>
+          <ScalarInput value={slide.emoji} onChange={(v) => onChange({ emoji: v })} />
+        </EditorRow>
+      )}
+      {slide.bigNumber !== undefined && (
+        <EditorRow label={L.bigNumber}>
+          <ScalarInput value={slide.bigNumber} onChange={(v) => onChange({ bigNumber: v })} />
+        </EditorRow>
+      )}
+      {Array.isArray(slide.items) && (
+        <EditorRow label={L.items}>
+          <ItemsEditor
+            values={slide.items}
+            onChange={(next) => onChange({ items: next })}
+            addLabel={L.addItem}
+            removeLabel={L.remove}
+          />
+        </EditorRow>
+      )}
+      {Array.isArray(slide.leftItems) && (
+        <EditorRow label={L.leftItems}>
+          <ItemsEditor
+            values={slide.leftItems}
+            onChange={(next) => onChange({ leftItems: next })}
+            addLabel={L.addItem}
+            removeLabel={L.remove}
+          />
+        </EditorRow>
+      )}
+      {Array.isArray(slide.rightItems) && (
+        <EditorRow label={L.rightItems}>
+          <ItemsEditor
+            values={slide.rightItems}
+            onChange={(next) => onChange({ rightItems: next })}
+            addLabel={L.addItem}
+            removeLabel={L.remove}
+          />
+        </EditorRow>
+      )}
+      {hasStructured && (
+        <div style={{ fontSize: 10, color: "#666", marginTop: 6, lineHeight: 1.4 }}>
+          {L.note}
+        </div>
+      )}
+
+      <details style={{ marginTop: 10, borderTop: "1px solid #262626", paddingTop: 10 }} open={hasStyleOverride}>
+        <summary style={{ cursor: "pointer", fontSize: 10, color: hasStyleOverride ? "#F59E0B" : "#888", textTransform: "uppercase", letterSpacing: "0.08em", userSelect: "none" }}>
+          {L.styleSection}{hasStyleOverride ? " ●" : ""}
+        </summary>
+        <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <StyleSelect label={L.styleFont} value={slide.font} options={STYLE_OPTIONS.font} globalLabel={L.styleGlobal} onChange={(v) => onChange({ font: v })} />
+          <StyleSelect label={L.styleSurface} value={slide.surface} options={STYLE_OPTIONS.surface} globalLabel={L.styleGlobal} onChange={(v) => onChange({ surface: v })} />
+          <StyleSelect label={L.styleAccent} value={slide.accent} options={STYLE_OPTIONS.accent} globalLabel={L.styleGlobal} onChange={(v) => onChange({ accent: v })} />
+          <StyleSelect label={L.styleBg} value={slide.bg} options={STYLE_OPTIONS.bg} globalLabel={L.styleGlobal} onChange={(v) => onChange({ bg: v })} />
+        </div>
+        <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => onChange({ font: undefined, surface: undefined, accent: undefined, bg: undefined })}
+            disabled={!hasStyleOverride}
+            style={{
+              background: "transparent", color: hasStyleOverride ? "#aaa" : "#444",
+              border: "1px solid #333", borderRadius: 6, padding: "4px 10px",
+              cursor: hasStyleOverride ? "pointer" : "default", fontSize: 11,
+            }}
+          >
+            {L.styleClear}
+          </button>
+          <span style={{ fontSize: 10, color: "#555", lineHeight: 1.3 }}>{L.styleHint}</span>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+// ============================================================
 // MAIN PAGE
 // ============================================================
 
@@ -1643,6 +1925,18 @@ export default function CarouselPage() {
   const [purposeId, setPurposeId] = useState<PurposeId>(DEFAULT_PURPOSE);
   const [formatId, setFormatId] = useState<FormatId>(DEFAULT_FORMAT);
   const [bgType, setBgType] = useState<BgType>(DEFAULT_BG);
+  const [slidesState, setSlidesState] = useState<SlideData[]>(INITIAL_SLIDES);
+  const SLIDES = slidesState;
+  const updateSlide = useCallback(
+    (i: number, patch: Partial<SlideData>) =>
+      setSlidesState((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...patch } : s))),
+    [],
+  );
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    JSON.stringify({ s: INITIAL_SLIDES, f: DEFAULT_FONT, su: DEFAULT_SURFACE, a: DEFAULT_ACCENT, p: DEFAULT_PURPOSE, b: DEFAULT_BG, fo: DEFAULT_FORMAT }),
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState("");
   const langRef = useRef<Lang>("ru");
@@ -1651,7 +1945,21 @@ export default function CarouselPage() {
 
   const canvasW = FORMAT_PRESETS[formatId].w;
   const canvasH = FORMAT_PRESETS[formatId].h;
-  const preset = composePreset(FONT_STYLES[fontId], SURFACES[surfaceId], ACCENTS[accentId], purposeId);
+
+  // Per-slide effective style: slide-level fields override the global toolbar.
+  const effStyle = useCallback(
+    (slide: SlideData) => {
+      const f = slide.font ?? fontId;
+      const su = slide.surface ?? surfaceId;
+      const ac = slide.accent ?? accentId;
+      const bg = slide.bg ?? bgType;
+      return {
+        preset: composePreset(FONT_STYLES[f], SURFACES[su], ACCENTS[ac], purposeId),
+        bgType: bg,
+      };
+    },
+    [fontId, surfaceId, accentId, bgType, purposeId],
+  );
 
   const captureSlide = useCallback(
     async (index: number): Promise<string | null> => {
@@ -1662,12 +1970,13 @@ export default function CarouselPage() {
       el.style.zIndex = "-1";
       await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
+      const slidePreset = effStyle(slidesState[index]).preset;
       const opts = {
         width: canvasW,
         height: canvasH,
         pixelRatio: 2,
         cacheBust: true,
-        backgroundColor: preset.bg,
+        backgroundColor: slidePreset.bg,
       };
 
       // Double-call: first warms fonts/images, second captures
@@ -1679,7 +1988,7 @@ export default function CarouselPage() {
       el.style.zIndex = "-1";
       return dataUrl;
     },
-    [preset.bg, canvasW, canvasH]
+    [effStyle, slidesState, canvasW, canvasH]
   );
 
   const exportSlide = useCallback(
@@ -1713,13 +2022,15 @@ export default function CarouselPage() {
     const orientation = isLandscape ? "landscape" : "portrait";
     const { default: jsPDF } = await import("jspdf");
     const pdf = new jsPDF({ orientation, unit: "px", format: [canvasW, canvasH], hotfixes: ["px_scaling"] });
-    const jpegOpts = { width: canvasW, height: canvasH, pixelRatio: 2, cacheBust: true, backgroundColor: preset.bg, quality: 0.92 };
 
     const tl = T[langRef.current];
     for (let i = 0; i < SLIDES.length; i++) {
       setExportStatus(tl.statusPdf(i + 1, SLIDES.length));
       const el = offscreenRefs.current[i];
       if (!el) continue;
+
+      const slideBg = effStyle(SLIDES[i]).preset.bg;
+      const jpegOpts = { width: canvasW, height: canvasH, pixelRatio: 2, cacheBust: true, backgroundColor: slideBg, quality: 0.92 };
 
       el.style.opacity = "1";
       el.style.zIndex = "-1";
@@ -1739,7 +2050,35 @@ export default function CarouselPage() {
     setExportStatus(T[langRef.current].statusDone);
     setExporting(false);
     setTimeout(() => setExportStatus(""), 2000);
-  }, [preset.bg, canvasW, canvasH]);
+  }, [effStyle, slidesState, canvasW, canvasH]);
+
+  const currentSnapshot = JSON.stringify({ s: slidesState, f: fontId, su: surfaceId, a: accentId, p: purposeId, b: bgType, fo: formatId });
+  const dirty = currentSnapshot !== savedSnapshot;
+
+  const saveToFile = useCallback(async () => {
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const res = await fetch("/api/slides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slides: slidesState,
+          font: fontId, surface: surfaceId, accent: accentId,
+          purpose: purposeId, bg: bgType, format: formatId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setSavedSnapshot(currentSnapshot);
+      setSaveMsg(lang === "ru" ? "Сохранено" : "Saved");
+    } catch (e) {
+      setSaveMsg((lang === "ru" ? "Ошибка: " : "Error: ") + (e as Error).message);
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMsg(""), 3000);
+    }
+  }, [slidesState, fontId, surfaceId, accentId, purposeId, bgType, formatId, currentSnapshot, lang]);
 
   return (
     <CanvasSizeContext.Provider value={{ w: canvasW, h: canvasH }}>
@@ -1778,6 +2117,21 @@ export default function CarouselPage() {
                 </button>
               ))}
             </div>
+            <button
+              onClick={saveToFile}
+              disabled={saving || !dirty}
+              title={lang === "ru" ? "Записать правки в src/slides.ts" : "Persist edits to src/slides.ts"}
+              style={{
+                padding: "8px 16px", minWidth: 110, minHeight: 36, borderRadius: 8, border: "none",
+                background: saving ? "#444" : dirty ? "#F59E0B" : "#2a2a2a",
+                color: dirty ? "#fff" : "#666",
+                cursor: saving || !dirty ? "default" : "pointer",
+                fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+              }}
+              className="tb-btn"
+            >
+              {saving ? "…" : saveMsg ? saveMsg : dirty ? (lang === "ru" ? "Сохранить●" : "Save●") : (lang === "ru" ? "Сохранено" : "Saved")}
+            </button>
             <button onClick={exportPdf} disabled={exporting} style={{ padding: "8px 20px", minWidth: 120, minHeight: 36, borderRadius: 8, border: "none", background: exporting ? "#444" : "#6366F1", color: "#fff", cursor: exporting ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }} className="tb-btn">
               {exporting ? exportStatus : t.btnPdf}
             </button>
@@ -1890,19 +2244,25 @@ export default function CarouselPage() {
           gap: 20,
         }}
       >
-        {SLIDES.map((slide, i) => (
+        {SLIDES.map((slide, i) => {
+          const { preset: slidePreset, bgType: slideBg } = effStyle(slide);
+          const overridden =
+            slide.font !== undefined || slide.surface !== undefined ||
+            slide.accent !== undefined || slide.bg !== undefined;
+          return (
           <div key={i}>
             <div
               onClick={() => !exporting && exportSlide(i)}
               className="slide-card"
               title="Click to export this slide"
+              style={overridden ? { outline: "2px solid #F59E0B", outlineOffset: 2, borderRadius: 8 } : undefined}
             >
               <SlidePreview
                 data={slide}
-                preset={preset}
+                preset={slidePreset}
                 index={i}
                 total={SLIDES.length}
-                bgType={bgType}
+                bgType={slideBg}
               />
             </div>
             <div
@@ -1916,14 +2276,24 @@ export default function CarouselPage() {
             >
               {i + 1}/{SLIDES.length} — {slide.type}
             </div>
+            <SlideEditor
+              slide={slide}
+              onChange={(patch) => updateSlide(i, patch)}
+              lang={lang}
+            />
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Offscreen slides for export — always rendered at (0,0), invisible via opacity */}
-      {SLIDES.map((slide, i) => (
+      {SLIDES.map((slide, i) => {
+        const { preset: slidePreset, bgType: slideBg } = effStyle(slide);
+        return (
         <div
           key={`export-${i}`}
+          data-slide-export-index={i}
+          data-slide-type={slide.type}
           ref={(el) => {
             offscreenRefs.current[i] = el;
           }}
@@ -1936,12 +2306,14 @@ export default function CarouselPage() {
             opacity: 0,
             pointerEvents: "none",
             zIndex: -1,
-            fontFamily: preset.fontFamily,
+            fontFamily: slidePreset.fontFamily,
           }}
         >
-          <Slide data={slide} preset={preset} index={i} total={SLIDES.length} bgType={bgType} />
+          <Slide data={slide} preset={slidePreset} index={i} total={SLIDES.length} bgType={slideBg} />
         </div>
-      ))}
+        );
+      })}
+      <div data-slide-total={SLIDES.length} style={{ display: "none" }} />
 
       {/* Info */}
       <div

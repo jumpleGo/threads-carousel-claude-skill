@@ -128,6 +128,11 @@ export interface SlideData {
   bigNumber?: string;
   // highlight variant — "italic-box" renders highlighted word in Playfair italic on colored box
   highlightStyle?: "default" | "italic-box";
+  // ---- per-slide style overrides (when set, override the global toolbar value)
+  surface?: SurfaceId;
+  accent?: AccentId;
+  font?: FontId;
+  bg?: BgType;
 }
 
 // ---- Internal composed type used by all slide components ----
