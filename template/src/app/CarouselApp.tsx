@@ -1578,9 +1578,12 @@ const T = {
     rowFormat: "Format",
     btnPdf: "Export PDF",
     btnAll: "Export All",
+    btnMp4: "MP4",
     statusDone: "Done!",
     statusExport: (i: number, n: number) => `Exporting ${i}/${n}...`,
     statusPdf: (i: number, n: number) => `PDF ${i}/${n}...`,
+    statusVideo: "Rendering MP4…",
+    videoHint: "5 sec animated hook for mixed-media carousels",
     footer: (w: number, h: number, n: number) =>
       `${w}×${h}px — ${n} slides — Click a slide to export individually`,
     modes: { carousel: "Carousel", presentation: "Presentation" } as Record<PurposeId, string>,
@@ -1608,9 +1611,12 @@ const T = {
     rowFormat: "Формат",
     btnPdf: "PDF",
     btnAll: "PNG",
+    btnMp4: "MP4",
     statusDone: "Готово!",
     statusExport: (i: number, n: number) => `Экспорт ${i}/${n}...`,
     statusPdf: (i: number, n: number) => `PDF ${i}/${n}...`,
+    statusVideo: "Рендер MP4…",
+    videoHint: "5-сек анимированный hook для mixed-media карусели",
     footer: (w: number, h: number, n: number) =>
       `${w}×${h}px — ${n} слайдов — Нажми на слайд для экспорта`,
     modes: { carousel: "Карусель", presentation: "Презентация" } as Record<PurposeId, string>,
@@ -2003,6 +2009,56 @@ export default function CarouselPage() {
     [captureSlide]
   );
 
+  const [videoRendering, setVideoRendering] = useState<number | null>(null);
+  const exportVideo = useCallback(
+    async (index: number) => {
+      const slide = slidesState[index];
+      if (slide.type !== "hook" || !slide.text) return;
+      const f = slide.font ?? fontId;
+      const su = slide.surface ?? surfaceId;
+      const ac = slide.accent ?? accentId;
+      const bg = slide.bg ?? bgType;
+      const payload = {
+        text: slide.text,
+        highlight: slide.highlight,
+        highlightStyle: slide.highlightStyle,
+        badge: slide.badge,
+        fontId: f,
+        surfaceId: su,
+        accentId: ac,
+        bgType: bg,
+        formatId,
+        index,
+        total: SLIDES.length,
+      };
+      setVideoRendering(index);
+      try {
+        const r = await fetch("/api/render-video", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!r.ok) {
+          const t = await r.text().catch(() => "");
+          throw new Error(`HTTP ${r.status} ${t.slice(0, 200)}`);
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `${String(index + 1).padStart(2, "0")}-hook.mp4`;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error("render-video failed:", e);
+        alert(`MP4 render failed: ${(e as Error).message}`);
+      } finally {
+        setVideoRendering(null);
+      }
+    },
+    [slidesState, fontId, surfaceId, accentId, bgType, formatId],
+  );
+
   const exportAll = useCallback(async () => {
     setExporting(true);
     const tl = T[langRef.current];
@@ -2276,6 +2332,32 @@ export default function CarouselPage() {
             >
               {i + 1}/{SLIDES.length} — {slide.type}
             </div>
+            {slide.type === "hook" && (
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 6 }}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); exportVideo(i); }}
+                  disabled={videoRendering !== null}
+                  title={t.videoHint}
+                  className="tb-btn"
+                  style={{
+                    padding: "6px 14px",
+                    minHeight: 30,
+                    borderRadius: 6,
+                    border: "1px solid #6366F1",
+                    background: videoRendering === i ? "#3730A3" : "transparent",
+                    color: videoRendering === i ? "#fff" : "#A5B4FC",
+                    cursor: videoRendering !== null ? "not-allowed" : "pointer",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {videoRendering === i ? t.statusVideo : `▶ ${t.btnMp4}`}
+                </button>
+              </div>
+            )}
             <SlideEditor
               slide={slide}
               onChange={(patch) => updateSlide(i, patch)}

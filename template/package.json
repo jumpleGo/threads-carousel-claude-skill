@@ -8,11 +8,16 @@
     "start": "next start"
   },
   "dependencies": {
+    "@remotion/bundler": "^4.0.465",
+    "@remotion/cli": "^4.0.465",
+    "@remotion/google-fonts": "^4.0.465",
+    "@remotion/renderer": "^4.0.465",
+    "html-to-image": "^1.11.11",
+    "jspdf": "^4.2.1",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "html-to-image": "^1.11.11",
-    "jspdf": "^4.2.1"
+    "remotion": "^4.0.465"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
