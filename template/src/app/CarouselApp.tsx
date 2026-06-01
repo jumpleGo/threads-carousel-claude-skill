@@ -1247,58 +1247,231 @@ function SlideImage({
   total: number;
   bgType: BgType;
 }) {
-  return (
-    <SlideShell preset={preset} index={index} total={total} bgType={bgType}>
-      {data.badge && <Badge text={data.badge} preset={preset} />}
+  const { w: CANVAS_W, h: CANVAS_H } = useCanvasSize();
+  const layout = data.imageLayout ?? "contain";
+  const alt = data.imageCaption || data.title || "slide image";
+  const uppercase = preset.titleUppercase ?? true;
+
+  // ---- Раскладка "фон": фото на весь слайд, текст поверх затемнения ----
+  if (layout === "background") {
+    return (
+      <div
+        style={{
+          width: CANVAS_W,
+          height: CANVAS_H,
+          position: "relative",
+          overflow: "hidden",
+          background: preset.bgGradient || preset.bg,
+          fontFamily: preset.fontFamily,
+          boxSizing: "border-box",
+        }}
+      >
+        {data.imageSrc && (
+          <img
+            src={data.imageSrc}
+            alt={alt}
+            crossOrigin="anonymous"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        )}
+        {/* затемнение для читаемости текста */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 42%, rgba(0,0,0,0.12) 100%)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            padding: "80px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            boxSizing: "border-box",
+          }}
+        >
+          <div>{data.badge && <Badge text={data.badge} preset={preset} />}</div>
+          <div style={{ paddingBottom: 40 }}>
+            {data.title && (
+              <div
+                style={{
+                  fontFamily: preset.fontFamily,
+                  fontSize: preset.titleFontSize ?? 64,
+                  fontWeight: 800,
+                  color: "#fff",
+                  textTransform: uppercase ? "uppercase" : "none",
+                  letterSpacing: uppercase ? "0.04em" : "-0.02em",
+                  lineHeight: 1.05,
+                  marginBottom: data.imageCaption ? 20 : 0,
+                  textWrap: "balance" as const,
+                }}
+              >
+                {renderWithHighlight(data.title, data.highlight, preset.highlightColor, data.highlightStyle)}
+              </div>
+            )}
+            {data.imageCaption && (
+              <div
+                style={{
+                  fontFamily: preset.fontFamily,
+                  fontSize: 40,
+                  fontWeight: 500,
+                  color: "rgba(255,255,255,0.82)",
+                  lineHeight: 1.25,
+                  textWrap: "balance" as const,
+                }}
+              >
+                {data.imageCaption}
+              </div>
+            )}
+          </div>
+        </div>
+        <SlideCounter current={index} total={total} color="#fff" />
+      </div>
+    );
+  }
+
+  // ---- Раскладка "карточка": фото по центру, подпись снизу (как было) ----
+  if (layout === "contain") {
+    return (
+      <SlideShell preset={preset} index={index} total={total} bgType={bgType}>
+        {data.badge && <Badge text={data.badge} preset={preset} />}
+        {data.title && (
+          <>
+            <SlideTitle text={data.title} preset={preset} highlight={data.highlight} highlightStyle={data.highlightStyle} />
+            <TitleDivider preset={preset} />
+          </>
+        )}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 32,
+            position: "relative",
+            minHeight: 0,
+          }}
+        >
+          {data.imageSrc && (
+            <img
+              src={data.imageSrc}
+              alt={alt}
+              crossOrigin="anonymous"
+              style={{
+                maxWidth: "100%",
+                maxHeight: data.imageCaption ? "78%" : "88%",
+                objectFit: "contain",
+                borderRadius: 18,
+                boxShadow: "0 18px 60px rgba(0,0,0,0.22)",
+                display: "block",
+              }}
+            />
+          )}
+          {data.imageCaption && (
+            <div
+              style={{
+                fontFamily: preset.fontFamily,
+                fontSize: 40,
+                fontWeight: 500,
+                color: preset.textSecondary,
+                letterSpacing: "0.01em",
+                textAlign: "center",
+                lineHeight: 1.25,
+                textWrap: "balance" as const,
+              }}
+            >
+              {data.imageCaption}
+            </div>
+          )}
+        </div>
+      </SlideShell>
+    );
+  }
+
+  // ---- Раскладки "сверху / снизу / слева / справа": фото-блок + текст-блок ----
+  const isRow = layout === "left" || layout === "right";
+  const imageBlock = (
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        minWidth: 0,
+        borderRadius: 18,
+        overflow: "hidden",
+        boxShadow: "0 18px 60px rgba(0,0,0,0.22)",
+      }}
+    >
+      {data.imageSrc && (
+        <img
+          src={data.imageSrc}
+          alt={alt}
+          crossOrigin="anonymous"
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      )}
+    </div>
+  );
+  const textBlock = (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        flex: isRow ? 1 : undefined,
+        minWidth: 0,
+      }}
+    >
       {data.title && (
         <>
           <SlideTitle text={data.title} preset={preset} highlight={data.highlight} highlightStyle={data.highlightStyle} />
           <TitleDivider preset={preset} />
         </>
       )}
+      {data.imageCaption && (
+        <div
+          style={{
+            fontFamily: preset.fontFamily,
+            fontSize: 40,
+            fontWeight: 500,
+            color: preset.textSecondary,
+            lineHeight: 1.25,
+            textWrap: "balance" as const,
+          }}
+        >
+          {data.imageCaption}
+        </div>
+      )}
+    </div>
+  );
+
+  const order =
+    layout === "top" ? [imageBlock, textBlock] :
+    layout === "bottom" ? [textBlock, imageBlock] :
+    layout === "left" ? [imageBlock, textBlock] :
+    [textBlock, imageBlock]; // right
+
+  return (
+    <SlideShell preset={preset} index={index} total={total} bgType={bgType}>
+      {data.badge && <Badge text={data.badge} preset={preset} />}
       <div
         style={{
           flex: 1,
           display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: 32,
-          position: "relative",
+          flexDirection: isRow ? "row" : "column",
+          gap: isRow ? 48 : 40,
           minHeight: 0,
+          alignItems: "stretch",
+          position: "relative",
         }}
       >
-        {data.imageSrc && (
-          <img
-            src={data.imageSrc}
-            alt={data.imageCaption || data.title || "slide image"}
-            crossOrigin="anonymous"
-            style={{
-              maxWidth: "100%",
-              maxHeight: data.imageCaption ? "78%" : "88%",
-              objectFit: "contain",
-              borderRadius: 18,
-              boxShadow: "0 18px 60px rgba(0,0,0,0.22)",
-              display: "block",
-            }}
-          />
-        )}
-        {data.imageCaption && (
-          <div
-            style={{
-              fontFamily: preset.fontFamily,
-              fontSize: 40,
-              fontWeight: 500,
-              color: preset.textSecondary,
-              letterSpacing: "0.01em",
-              textAlign: "center",
-              lineHeight: 1.25,
-              textWrap: "balance" as const,
-            }}
-          >
-            {data.imageCaption}
-          </div>
-        )}
+        {order.map((block, i) => (
+          <div key={i} style={{ display: "contents" }}>{block}</div>
+        ))}
       </div>
     </SlideShell>
   );
@@ -1647,6 +1820,8 @@ const EDITOR_LABELS = {
     leftLabel: "Левая колонка", rightLabel: "Правая колонка",
     items: "Пункты", leftItems: "Слева", rightItems: "Справа",
     imageCaption: "Подпись", emoji: "Эмодзи", bigNumber: "Число",
+    imageLayout: "Раскладка фото",
+    layouts: { background: "Фон", contain: "Карточка", top: "Сверху", bottom: "Снизу", left: "Слева", right: "Справа" },
     addItem: "+ пункт", remove: "✕",
     note: "Структурные поля (stats / steps / points) правь через /carousel_make.",
     styleSection: "Стиль этого слайда",
@@ -1661,6 +1836,8 @@ const EDITOR_LABELS = {
     leftLabel: "Left label", rightLabel: "Right label",
     items: "Items", leftItems: "Left items", rightItems: "Right items",
     imageCaption: "Caption", emoji: "Emoji", bigNumber: "Big number",
+    imageLayout: "Image layout",
+    layouts: { background: "Background", contain: "Card", top: "Top", bottom: "Bottom", left: "Left", right: "Right" },
     addItem: "+ item", remove: "✕",
     note: "Structural fields (stats / steps / points) — edit via /carousel_make.",
     styleSection: "Style for this slide",
@@ -1677,6 +1854,8 @@ const STYLE_OPTIONS = {
   accent: ["yellow", "red", "teal", "coral", "orange", "violet", "lime", "blue", "fuchsia", "pink", "amber"] as const,
   bg: ["none", "blobs", "grid", "lines", "noise", "bignumber", "glow", "paper"] as const,
 };
+
+const IMAGE_LAYOUTS = ["background", "contain", "top", "bottom", "left", "right"] as const;
 
 type EditorLang = keyof typeof EDITOR_LABELS;
 
@@ -1840,6 +2019,34 @@ function SlideEditor({
       {slide.imageCaption !== undefined && (
         <EditorRow label={L.imageCaption}>
           <ScalarInput value={slide.imageCaption} onChange={(v) => onChange({ imageCaption: v })} />
+        </EditorRow>
+      )}
+      {slide.imageSrc !== undefined && (
+        <EditorRow label={L.imageLayout}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {IMAGE_LAYOUTS.map((lay) => {
+              const active = (slide.imageLayout ?? "contain") === lay;
+              return (
+                <button
+                  key={lay}
+                  type="button"
+                  onClick={() => onChange({ imageLayout: lay })}
+                  style={{
+                    background: active ? "#F59E0B" : "transparent",
+                    color: active ? "#000" : "#aaa",
+                    border: active ? "1px solid #F59E0B" : "1px solid #333",
+                    borderRadius: 6,
+                    padding: "5px 10px",
+                    cursor: "pointer",
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}
+                >
+                  {L.layouts[lay]}
+                </button>
+              );
+            })}
+          </div>
         </EditorRow>
       )}
       {slide.emoji !== undefined && (

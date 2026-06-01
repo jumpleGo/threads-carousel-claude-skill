@@ -122,6 +122,8 @@ export interface SlideData {
   // image slide — put file into /public/images/ and reference as "/images/file.png"
   imageSrc?: string;
   imageCaption?: string;
+  // image slide layout — как размещается фото на слайде
+  imageLayout?: "background" | "contain" | "top" | "bottom" | "left" | "right";
   // emoji slide — single grapheme rendered large
   emoji?: string;
   // number slide — big hero number/string like "17", "5K+", "№1"

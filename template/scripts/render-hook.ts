@@ -8,12 +8,28 @@ import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 
-const BROWSER_EXECUTABLE =
-  process.env.REMOTION_CHROME_EXECUTABLE ||
-  "/home/painsearchdev/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome";
+// Выбираем исполняемый Chrome: переменная окружения, затем системный
+// браузер (macOS/Linux). Если ни один путь не существует — возвращаем null,
+// тогда Remotion сам скачает headless-браузер.
+function resolveBrowserExecutable(): string | null {
+  const candidates = [
+    process.env.REMOTION_CHROME_EXECUTABLE,
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+  ].filter((p): p is string => Boolean(p));
+  return candidates.find((p) => existsSync(p)) ?? null;
+}
 
-const PROJECT_ROOT = path.resolve(__dirname, "..");
+const BROWSER_EXECUTABLE = resolveBrowserExecutable();
+
+// Якорим к рабочей директории (template/), а не к __dirname: при сборке
+// внутри Next-роута __dirname указывает в .next/server/, где исходников нет.
+const PROJECT_ROOT = process.cwd();
 const ENTRY = path.join(PROJECT_ROOT, "src/remotion/index.ts");
 
 let cachedBundleLocation: string | null = null;
